@@ -22,9 +22,7 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
     <!-- Brand Logo -->
     <a href="/" class="flex items-center gap-2.5 group shrink-0">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center shadow-lg shadow-rose-500/20 group-hover:scale-105 transition-transform duration-200">
-        <BookOpen class="w-5 h-5 text-white" />
-      </div>
+      <img src="/icon.png" alt="MangaHost" class="w-9 h-9 rounded-xl object-cover shadow-lg shadow-rose-500/20 group-hover:scale-105 transition-transform duration-200 border border-white/10" />
       <div class="flex flex-col">
         <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-rose-400 bg-clip-text text-transparent">
           Manga<span class="text-rose-500">Host</span>
