@@ -13,6 +13,7 @@ import (
 	"r2apimangahost/backend/internal/config"
 	"r2apimangahost/backend/internal/db"
 	"r2apimangahost/backend/internal/handlers"
+	customMiddleware "r2apimangahost/backend/internal/middleware"
 	"r2apimangahost/backend/internal/storage"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,9 @@ import (
 
 func main() {
 	cfg := config.LoadConfig()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid server configuration: %v", err)
+	}
 
 	log.Println("==================================================")
 	log.Println("🚀 Starting Cloudflare R2 Manga Host API (Go)...")
@@ -56,19 +60,19 @@ func main() {
 
 	// Global Middlewares
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(customMiddleware.SecurityHeaders)
 	r.Use(middleware.Compress(5))
 	r.Use(middleware.Timeout(120 * time.Second)) // generous timeout for large zip uploads
 
 	// CORS Configuration
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedOrigins:   cfg.AllowedOriginList(),
+		AllowedMethods:   []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
+		ExposedHeaders:   []string{"Link", "RateLimit-Limit", "RateLimit-Policy", "RateLimit-Remaining", "Retry-After"},
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 
@@ -79,23 +83,33 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok","time":"` + time.Now().Format(time.RFC3339) + `"}`))
 	})
 
+	// Rate Limiters (Config-driven with generous defaults: 300 req/min general, 20 req/min login)
+	generalLimiter := customMiddleware.NewIPRateLimiter(cfg.RateLimitGeneralRPM, cfg.RateLimitGeneralBurst, cfg.TrustProxyHeaders)
+	loginLimiter := customMiddleware.NewIPRateLimiter(cfg.RateLimitLoginRPM, cfg.RateLimitLoginBurst, cfg.TrustProxyHeaders)
+	adminLimiter := customMiddleware.NewIPRateLimiter(cfg.RateLimitAdminRPM, cfg.RateLimitAdminBurst, cfg.TrustProxyHeaders)
+
 	// API Routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Public Auth
-		r.Post("/auth/login", authHandler.Login)
+		// Public Auth with strict rate limit
+		r.With(loginLimiter.Handler).Post("/auth/login", authHandler.Login)
 
-		// Public Content
-		r.Get("/home", genreHandler.GetHome)
-		r.Get("/genres", genreHandler.GetGenres)
-		r.Get("/stats", genreHandler.GetStats)
+		// Public Content with general rate limit
+		r.Group(func(r chi.Router) {
+			r.Use(generalLimiter.Handler)
 
-		r.Get("/manga", mangaHandler.GetMangas)
-		r.Get("/manga/{id}", mangaHandler.GetManga)
-		r.Get("/chapter/{id}", chapterHandler.GetChapter)
+			r.Get("/home", genreHandler.GetHome)
+			r.Get("/genres", genreHandler.GetGenres)
+			r.Get("/stats", genreHandler.GetStats)
+
+			r.Get("/manga", mangaHandler.GetMangas)
+			r.Get("/manga/{id}", mangaHandler.GetManga)
+			r.Get("/chapter/{id}", chapterHandler.GetChapter)
+		})
 
 		// Admin Protected Routes
 		r.Group(func(r chi.Router) {
 			r.Use(authService.RequireAdminMiddleware)
+			r.Use(adminLimiter.Handler)
 
 			r.Get("/auth/me", authHandler.Me)
 

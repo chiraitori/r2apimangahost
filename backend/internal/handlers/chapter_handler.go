@@ -118,10 +118,11 @@ func (h *ChapterHandler) GetChapter(w http.ResponseWriter, r *http.Request) {
 func (h *ChapterHandler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	mangaIDOrSlug := chi.URLParam(r, "mangaId")
+	limitRequestBody(w, r, maxChapterRequestBytes)
 
-	// Limit to 200MB multipart form for batch/zip uploads
-	if err := r.ParseMultipartForm(200 << 20); err != nil {
-		writeError(w, http.StatusBadRequest, "Failed to parse form: "+err.Error())
+	// Keep only a small portion in memory; MaxBytesReader above enforces the hard total limit.
+	if err := r.ParseMultipartForm(16 << 20); err != nil {
+		writeParseError(w, err, "Failed to parse form")
 		return
 	}
 
@@ -171,6 +172,10 @@ func (h *ChapterHandler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 	archiveFile, archiveHeader, err := r.FormFile("archive")
 	if err == nil {
 		defer archiveFile.Close()
+		if archiveHeader.Size <= 0 || archiveHeader.Size > maxArchiveBytes {
+			writeError(w, http.StatusRequestEntityTooLarge, "Archive must be smaller than 200 MiB")
+			return
+		}
 		ext := strings.ToLower(filepath.Ext(archiveHeader.Filename))
 		if ext != ".zip" && ext != ".cbz" {
 			writeError(w, http.StatusBadRequest, "Archive must be a .zip or .cbz file")
@@ -196,6 +201,14 @@ func (h *ChapterHandler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 		})
 
 		for idx, fh := range files {
+			if !isAllowedImageFilename(fh.Filename) {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Page %d has an unsupported image format", idx+1))
+				return
+			}
+			if fh.Size <= 0 || fh.Size > maxPageImageBytes {
+				writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Page %d must be smaller than 50 MiB", idx+1))
+				return
+			}
 			f, err := fh.Open()
 			if err != nil {
 				continue

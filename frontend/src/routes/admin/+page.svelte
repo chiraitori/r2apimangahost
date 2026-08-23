@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import { authStore } from '$lib/stores';
-  import type { Manga, StatsResponse, Chapter } from '$lib/types';
+  import type { Manga, StatsResponse, ChapterSummary } from '$lib/types';
   import {
     Plus,
     Upload,
@@ -34,7 +34,7 @@
   let showUploadChapterModal = false;
   let showManageChaptersModal = false;
   let selectedMangaForChapters: Manga | null = null;
-  let mangaChaptersList: Chapter[] = [];
+  let mangaChaptersList: ChapterSummary[] = [];
   let loadingChapters = false;
 
   // Form State: Create Manga
@@ -246,7 +246,7 @@
   }
 
   // Delete Chapter
-  async function handleDeleteChapter(chapter: Chapter) {
+  async function handleDeleteChapter(chapter: ChapterSummary) {
     if (confirm(`Xóa Chapter ${chapter.chapterNumber} và toàn bộ ảnh của chapter này khỏi Cloudflare R2?`)) {
       try {
         await api.deleteChapter(chapter.id);
@@ -751,7 +751,7 @@
                 {#if chap.title}
                   <span class="text-slate-400 text-xs ml-1">- {chap.title}</span>
                 {/if}
-                <span class="block text-[10px] text-slate-500">{chap.pageCount || chap.pages.length} trang</span>
+                <span class="block text-[10px] text-slate-500">{chap.pageCount} trang</span>
               </div>
 
               <div class="flex items-center gap-2">
@@ -777,7 +777,7 @@
 
       <div class="flex items-center justify-between pt-4 border-t border-slate-800">
         <button
-          on:click={() => openUploadChapter(selectedMangaForChapters)}
+          on:click={() => openUploadChapter(selectedMangaForChapters ?? undefined)}
           class="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-2"
         >
           <Upload class="w-3.5 h-3.5" /> Upload Thêm Chapter

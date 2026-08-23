@@ -237,7 +237,10 @@
         <div
           class="w-full flex flex-col items-center justify-center cursor-pointer select-none"
           style="max-width: {$readerSettings.maxWidth}px;"
+          role="button"
+          tabindex="0"
           on:click={nextPage}
+          on:keydown={(e) => e.key === 'Enter' && nextPage()}
         >
           <div class="relative min-h-[400px] flex items-center justify-center bg-slate-950">
             <img

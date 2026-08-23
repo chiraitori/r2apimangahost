@@ -50,6 +50,21 @@ type Chapter struct {
 	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
+// ChapterSummary is used in manga listings so page URLs are only fetched
+// when a reader explicitly opens a chapter.
+type ChapterSummary struct {
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	MangaID       primitive.ObjectID `bson:"mangaId" json:"mangaId"`
+	MangaSlug     string             `bson:"mangaSlug" json:"mangaSlug"`
+	ChapterNumber float64            `bson:"chapterNumber" json:"chapterNumber"`
+	Title         string             `bson:"title" json:"title"`
+	Volume        *int               `bson:"volume,omitempty" json:"volume,omitempty"`
+	Language      string             `bson:"language" json:"language"`
+	PageCount     int                `bson:"pageCount" json:"pageCount"`
+	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
+}
+
 type User struct {
 	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Username     string             `bson:"username" json:"username"`
@@ -95,8 +110,8 @@ type UpdateMangaRequest struct {
 }
 
 type MangaDetailResponse struct {
-	Manga    Manga     `json:"manga"`
-	Chapters []Chapter `json:"chapters"`
+	Manga    Manga            `json:"manga"`
+	Chapters []ChapterSummary `json:"chapters"`
 }
 
 type PaginationResponse struct {

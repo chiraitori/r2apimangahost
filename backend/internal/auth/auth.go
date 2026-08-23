@@ -55,7 +55,7 @@ func (a *AuthService) ValidateToken(tokenString string) (*Claims, error) {
 			return nil, errors.New("unexpected signing method")
 		}
 		return []byte(a.cfg.JWTSecret), nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("r2-manga-host"))
 
 	if err != nil {
 		return nil, err

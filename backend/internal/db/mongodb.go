@@ -137,6 +137,24 @@ func (d *Database) seedAdmin(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 		log.Printf("[DB] Initialized default admin account: %s", cfg.AdminUsername)
+		return nil
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+
+	// Keep the configured admin password authoritative so rotating the
+	// environment variable actually invalidates the old credential.
+	if bcrypt.CompareHashAndPassword([]byte(existingUser.PasswordHash), []byte(cfg.AdminPassword)) == nil {
+		return nil
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = d.Users.UpdateOne(ctx, bson.M{"_id": existingUser.ID}, bson.M{"$set": bson.M{"passwordHash": string(hashed)}})
+	if err == nil {
+		log.Printf("[DB] Rotated password for configured admin account: %s", cfg.AdminUsername)
+	}
+	return err
 }

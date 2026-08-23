@@ -29,6 +29,12 @@ type R2Storage struct {
 	publicDomain string
 }
 
+const (
+	maxObjectBytes              int64  = 50 << 20 // 50 MiB per image
+	maxArchiveImageCount               = 500
+	maxArchiveUncompressedBytes uint64 = 500 << 20 // 500 MiB after extraction
+)
+
 func NewR2Storage(cfg *config.Config) (*R2Storage, error) {
 	if cfg.R2AccountID == "" || cfg.R2AccessKeyID == "" || cfg.R2SecretKey == "" {
 		log.Println("[R2] Warning: Cloudflare R2 credentials are not fully configured.")
@@ -82,22 +88,32 @@ func (r *R2Storage) UploadFile(ctx context.Context, key string, body io.Reader, 
 		return "", fmt.Errorf("R2 storage is not configured")
 	}
 
-	// Read data into buffer or stream
+	// Bound every object even if a multipart or ZIP header reports a fake size.
 	var buf bytes.Buffer
-	size, err := io.Copy(&buf, body)
+	size, err := io.Copy(&buf, io.LimitReader(body, maxObjectBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("failed to read file body: %w", err)
 	}
+	if size > maxObjectBytes {
+		return "", fmt.Errorf("object exceeds the 50 MiB image limit")
+	}
+	if size == 0 {
+		return "", fmt.Errorf("cannot upload an empty object")
+	}
 
-	if contentType == "" {
-		contentType = http.DetectContentType(buf.Bytes()[:min(512, int(size))])
+	detectedType := http.DetectContentType(buf.Bytes()[:min(512, int(size))])
+	if strings.HasPrefix(detectedType, "image/") {
+		contentType = detectedType
+	} else if !(strings.EqualFold(filepath.Ext(key), ".avif") && contentType == "image/avif") {
+		return "", fmt.Errorf("object content is not a supported image (detected %s)", detectedType)
 	}
 
 	_, err = r.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(r.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(buf.Bytes()),
-		ContentType: aws.String(contentType),
+		Bucket:       aws.String(r.bucket),
+		Key:          aws.String(key),
+		Body:         bytes.NewReader(buf.Bytes()),
+		ContentType:  aws.String(contentType),
+		CacheControl: aws.String("public, max-age=14400"),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to upload object to R2: %w", err)
@@ -198,6 +214,20 @@ func (r *R2Storage) ExtractAndUploadZip(ctx context.Context, zipBytes []byte, ba
 
 	if len(imageFiles) == 0 {
 		return nil, fmt.Errorf("no valid image files found inside zip archive")
+	}
+	if len(imageFiles) > maxArchiveImageCount {
+		return nil, fmt.Errorf("archive contains too many images (maximum %d)", maxArchiveImageCount)
+	}
+
+	var totalUncompressed uint64
+	for _, file := range imageFiles {
+		if file.UncompressedSize64 == 0 || file.UncompressedSize64 > uint64(maxObjectBytes) {
+			return nil, fmt.Errorf("image %s exceeds the 50 MiB limit or is empty", file.Name)
+		}
+		totalUncompressed += file.UncompressedSize64
+		if totalUncompressed > maxArchiveUncompressedBytes {
+			return nil, fmt.Errorf("archive expands beyond the 500 MiB safety limit")
+		}
 	}
 
 	// Natural sort files by filename so pages are properly ordered 1, 2, ... 10, etc.

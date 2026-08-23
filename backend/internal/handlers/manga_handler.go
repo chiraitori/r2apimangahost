@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -173,15 +175,17 @@ func (h *MangaHandler) GetManga(w http.ResponseWriter, r *http.Request) {
 	// Fetch all chapters sorted by chapterNumber desc
 	chapterCursor, err := h.db.Chapters.Find(ctx,
 		bson.M{"mangaId": manga.ID},
-		options.Find().SetSort(bson.D{{Key: "chapterNumber", Value: -1}}),
+		options.Find().
+			SetSort(bson.D{{Key: "chapterNumber", Value: -1}}).
+			SetProjection(bson.M{"pages": 0}),
 	)
-	var chapters []models.Chapter
+	var chapters []models.ChapterSummary
 	if err == nil {
 		_ = chapterCursor.All(ctx, &chapters)
 		chapterCursor.Close(ctx)
 	}
 	if chapters == nil {
-		chapters = []models.Chapter{}
+		chapters = []models.ChapterSummary{}
 	}
 
 	manga.ChapterCount = len(chapters)
@@ -204,10 +208,15 @@ func (h *MangaHandler) CreateManga(w http.ResponseWriter, r *http.Request) {
 	var coverContentType string
 
 	isMultipart := strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
+	if isMultipart {
+		limitRequestBody(w, r, maxCoverRequestBytes)
+	} else {
+		limitRequestBody(w, r, maxJSONBodyBytes)
+	}
 
 	if isMultipart {
-		if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB max
-			writeError(w, http.StatusBadRequest, "Failed to parse form: "+err.Error())
+		if err := r.ParseMultipartForm(8 << 20); err != nil {
+			writeParseError(w, err, "Failed to parse form")
 			return
 		}
 
@@ -229,14 +238,25 @@ func (h *MangaHandler) CreateManga(w http.ResponseWriter, r *http.Request) {
 		file, handler, err := r.FormFile("cover")
 		if err == nil {
 			defer file.Close()
+			if !isAllowedImageFilename(handler.Filename) {
+				writeError(w, http.StatusBadRequest, "Unsupported cover image format")
+				return
+			}
+			if handler.Size <= 0 || handler.Size > maxCoverImageBytes {
+				writeError(w, http.StatusRequestEntityTooLarge, "Cover image must be smaller than 16 MiB")
+				return
+			}
 			coverFileName = handler.Filename
 			coverContentType = handler.Header.Get("Content-Type")
-			coverFileBytes = make([]byte, handler.Size)
-			_, _ = file.Read(coverFileBytes)
+			coverFileBytes, err = io.ReadAll(file)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "Failed to read cover image")
+				return
+			}
 		}
 	} else {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Invalid JSON payload: "+err.Error())
+			writeParseError(w, err, "Invalid JSON payload")
 			return
 		}
 	}
@@ -264,7 +284,7 @@ func (h *MangaHandler) CreateManga(w http.ResponseWriter, r *http.Request) {
 			ext = ".jpg"
 		}
 		key := fmt.Sprintf("mangas/%s/cover%s", slug, ext)
-		uploadedURL, err := h.storage.UploadFile(ctx, key, strings.NewReader(string(coverFileBytes)), coverContentType)
+		uploadedURL, err := h.storage.UploadFile(ctx, key, bytes.NewReader(coverFileBytes), coverContentType)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "Failed to upload cover to R2: "+err.Error())
 			return
@@ -334,8 +354,13 @@ func (h *MangaHandler) UpdateManga(w http.ResponseWriter, r *http.Request) {
 
 	isMultipart := strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
 	if isMultipart {
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
-			writeError(w, http.StatusBadRequest, "Failed to parse form: "+err.Error())
+		limitRequestBody(w, r, maxCoverRequestBytes)
+	} else {
+		limitRequestBody(w, r, maxJSONBodyBytes)
+	}
+	if isMultipart {
+		if err := r.ParseMultipartForm(8 << 20); err != nil {
+			writeParseError(w, err, "Failed to parse form")
 			return
 		}
 
@@ -367,6 +392,14 @@ func (h *MangaHandler) UpdateManga(w http.ResponseWriter, r *http.Request) {
 		file, handler, err := r.FormFile("cover")
 		if err == nil {
 			defer file.Close()
+			if !isAllowedImageFilename(handler.Filename) {
+				writeError(w, http.StatusBadRequest, "Unsupported cover image format")
+				return
+			}
+			if handler.Size <= 0 || handler.Size > maxCoverImageBytes {
+				writeError(w, http.StatusRequestEntityTooLarge, "Cover image must be smaller than 16 MiB")
+				return
+			}
 			ext := strings.ToLower(filepath.Ext(handler.Filename))
 			if ext == "" {
 				ext = ".jpg"
@@ -382,7 +415,7 @@ func (h *MangaHandler) UpdateManga(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var req models.UpdateMangaRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Invalid JSON payload: "+err.Error())
+			writeParseError(w, err, "Invalid JSON payload")
 			return
 		}
 

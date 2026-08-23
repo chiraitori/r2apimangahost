@@ -2,11 +2,11 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api';
-  import type { Manga, Chapter } from '$lib/types';
+  import type { Manga, ChapterSummary } from '$lib/types';
   import { BookOpen, User, Calendar, Eye, Star, ArrowUpDown, Search, Play, ArrowLeft, Loader2, Sparkles } from 'lucide-svelte';
 
   let manga: Manga | null = null;
-  let chapters: Chapter[] = [];
+  let chapters: ChapterSummary[] = [];
   let loading = true;
   let errorMsg = '';
   let chapterFilter = '';
@@ -21,6 +21,11 @@
   async function fetchMangaDetails() {
     loading = true;
     errorMsg = '';
+    if (!mangaId) {
+      errorMsg = 'Thiếu mã manga';
+      loading = false;
+      return;
+    }
     try {
       const res = await api.getManga(mangaId);
       manga = res.manga;
@@ -237,7 +242,7 @@
                   {/if}
                 </span>
                 <span class="text-[10px] text-slate-500 mt-0.5">
-                  {chapter.pageCount || chapter.pages.length} trang • {formatDate(chapter.createdAt)}
+                  {chapter.pageCount} trang • {formatDate(chapter.createdAt)}
                 </span>
               </div>
               <Play class="w-3.5 h-3.5 text-slate-600 group-hover:text-rose-500 shrink-0 transition-colors" />

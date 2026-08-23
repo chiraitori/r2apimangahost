@@ -33,9 +33,9 @@
       <div>
         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Tích Hợp</h4>
         <ul class="text-xs space-y-2 text-slate-400">
-          <li><a href="https://github.com/Paperback-iOS" target="_blank" class="hover:text-rose-400 transition-colors">Paperback iOS Extension</a></li>
+          <li><a href="https://github.com/chiraitori/paperback-mangahost-extension" target="_blank" rel="noopener noreferrer" class="hover:text-rose-400 transition-colors">Paperback iOS Extension</a></li>
           <li><a href="/admin/login" class="hover:text-rose-400 transition-colors">Admin Dashboard</a></li>
-          <li><a href="/api/v1/manga" target="_blank" class="hover:text-rose-400 transition-colors">REST API Docs</a></li>
+          <li><a href="https://api-manga.chiraitori.dev/api/v1/home" target="_blank" rel="noopener noreferrer" class="hover:text-rose-400 transition-colors">REST API Docs</a></li>
         </ul>
       </div>
     </div>

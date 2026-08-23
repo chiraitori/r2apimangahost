@@ -29,9 +29,10 @@ func NewAuthHandler(db *db.Database, authService *auth.AuthService, cfg *config.
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	limitRequestBody(w, r, 64<<10)
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeParseError(w, err, "Invalid request payload")
 		return
 	}
 

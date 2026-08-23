@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,6 +12,37 @@ import (
 
 	"r2apimangahost/backend/internal/models"
 )
+
+const (
+	maxJSONBodyBytes       int64 = 1 << 20   // 1 MiB
+	maxCoverRequestBytes   int64 = 20 << 20  // 20 MiB
+	maxCoverImageBytes     int64 = 16 << 20  // 16 MiB
+	maxChapterRequestBytes int64 = 220 << 20 // 220 MiB
+	maxArchiveBytes        int64 = 200 << 20 // 200 MiB compressed
+	maxPageImageBytes      int64 = 50 << 20  // 50 MiB per image
+)
+
+func limitRequestBody(w http.ResponseWriter, r *http.Request, maxBytes int64) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+}
+
+func writeParseError(w http.ResponseWriter, err error, fallback string) {
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		writeError(w, http.StatusRequestEntityTooLarge, "Request body is too large")
+		return
+	}
+	writeError(w, http.StatusBadRequest, fallback+": "+err.Error())
+}
+
+func isAllowedImageFilename(filename string) bool {
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp":
+		return true
+	default:
+		return false
+	}
+}
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

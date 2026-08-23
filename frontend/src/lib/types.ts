@@ -31,6 +31,8 @@ export interface Chapter {
   updatedAt: string;
 }
 
+export type ChapterSummary = Omit<Chapter, 'pages'>;
+
 export interface ChapterNav {
   id: string;
   chapterNumber: number;
@@ -46,7 +48,7 @@ export interface ChapterDetailResponse {
 
 export interface MangaDetailResponse {
   manga: Manga;
-  chapters: Chapter[];
+  chapters: ChapterSummary[];
 }
 
 export interface Pagination {
