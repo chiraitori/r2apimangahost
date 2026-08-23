@@ -17,29 +17,35 @@
   let currentPage = 1;
   let loading = true;
   let loadingCatalog = false;
+  let mounted = false;
+  let lastRouteKey = '';
+  let catalogRequestId = 0;
 
   $: queryParam = $page.url.searchParams.get('q') || '';
   $: genreParam = $page.url.searchParams.get('genre') || '';
+  $: routeKey = `${queryParam}\u0000${genreParam}`;
 
-  $: if (queryParam !== searchQuery) {
+  $: if (mounted && routeKey !== lastRouteKey) {
+    lastRouteKey = routeKey;
     searchQuery = queryParam;
-    fetchCatalog();
-  }
-
-  $: if (genreParam !== selectedGenre) {
     selectedGenre = genreParam;
-    fetchCatalog();
+    void fetchCatalog(1);
   }
 
   onMount(async () => {
+    searchQuery = queryParam;
+    selectedGenre = genreParam;
+    lastRouteKey = routeKey;
+    mounted = true;
+
     try {
       const [homeRes, genreRes] = await Promise.all([
         api.getHome().catch(() => null),
-        api.getGenres().catch(() => [])
+        api.getGenres().catch(() => []),
+        fetchCatalog(1)
       ]);
       homeData = homeRes;
       genres = genreRes;
-      await fetchCatalog();
     } catch (err) {
       console.error('Error loading initial home data:', err);
     } finally {
@@ -48,6 +54,7 @@
   });
 
   async function fetchCatalog(pageNumber = 1) {
+    const requestId = ++catalogRequestId;
     loadingCatalog = true;
     currentPage = pageNumber;
     try {
@@ -59,13 +66,15 @@
         page: currentPage,
         limit: 18
       });
+      if (requestId !== catalogRequestId) return;
       mangaList = res.data;
       pagination = res.pagination;
     } catch (err) {
+      if (requestId !== catalogRequestId) return;
       console.error('Error fetching catalog:', err);
       mangaList = [];
     } finally {
-      loadingCatalog = false;
+      if (requestId === catalogRequestId) loadingCatalog = false;
     }
   }
 

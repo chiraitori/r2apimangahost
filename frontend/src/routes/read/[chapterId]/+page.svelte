@@ -25,25 +25,32 @@
   let isFullscreen = false;
   let showHeader = true;
   let lastScrollY = 0;
+  let mounted = false;
+  let loadedChapterId = '';
+  let chapterRequestId = 0;
 
   $: chapterId = $page.params.chapterId;
 
-  // Reactively fetch chapter when chapterId changes
-  $: if (chapterId) {
-    loadChapter(chapterId);
+  $: if (mounted && chapterId && chapterId !== loadedChapterId) {
+    loadedChapterId = chapterId;
+    void loadChapter(chapterId);
   }
 
   async function loadChapter(id: string) {
+    const requestId = ++chapterRequestId;
     loading = true;
     errorMsg = '';
     currentPageIndex = 0;
     try {
-      data = await api.getChapter(id);
+      const response = await api.getChapter(id);
+      if (requestId !== chapterRequestId) return;
+      data = response;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
+      if (requestId !== chapterRequestId) return;
       errorMsg = err.message || 'Không thể tải nội dung chapter';
     } finally {
-      loading = false;
+      if (requestId === chapterRequestId) loading = false;
     }
   }
 
@@ -100,6 +107,11 @@
   }
 
   onMount(() => {
+    mounted = true;
+    if (chapterId) {
+      loadedChapterId = chapterId;
+      void loadChapter(chapterId);
+    }
     window.addEventListener('keydown', handleKeydown);
     window.addEventListener('scroll', handleScroll, { passive: true });
   });
