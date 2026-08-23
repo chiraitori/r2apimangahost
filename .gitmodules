@@ -1,0 +1,3 @@
+[submodule "paperback-extension"]
+	path = paperback-extension
+	url = https://github.com/chiraitori/paperback-mangahost-extension.git
