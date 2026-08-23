@@ -23,6 +23,8 @@ dist/
 
 # Go / Golang Binaries & Cache
 backend/server
+backend/server.next
+backend/server.previous
 backend/server.exe
 backend/mangahost
 backend/mangahost.exe
