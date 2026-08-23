@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,19 @@ import (
 
 	"r2apimangahost/backend/internal/models"
 )
+
+func setPublicCache(w http.ResponseWriter, browserSeconds, edgeSeconds int) {
+	w.Header().Set("Cache-Control", fmt.Sprintf(
+		"public, max-age=%d, s-maxage=%d, stale-while-revalidate=%d",
+		browserSeconds,
+		edgeSeconds,
+		edgeSeconds*5,
+	))
+}
+
+func setPrivateCache(w http.ResponseWriter, seconds int) {
+	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d", seconds))
+}
 
 const (
 	maxJSONBodyBytes       int64 = 1 << 20   // 1 MiB

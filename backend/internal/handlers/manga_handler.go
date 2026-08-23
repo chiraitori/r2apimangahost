@@ -117,23 +117,11 @@ func (h *MangaHandler) GetMangas(w http.ResponseWriter, r *http.Request) {
 		mangas = []models.Manga{}
 	}
 
-	// Populate latest chapter info for each manga
-	for i := range mangas {
-		var lastChapter models.Chapter
-		err := h.db.Chapters.FindOne(ctx,
-			bson.M{"mangaId": mangas[i].ID},
-			options.FindOne().SetSort(bson.D{{Key: "chapterNumber", Value: -1}}),
-		).Decode(&lastChapter)
-		if err == nil {
-			mangas[i].LastChapterNumber = &lastChapter.ChapterNumber
-		}
-
-		chapterCount, _ := h.db.Chapters.CountDocuments(ctx, bson.M{"mangaId": mangas[i].ID})
-		mangas[i].ChapterCount = int(chapterCount)
-	}
+	populateChapterMetadata(ctx, h.db.Chapters, mangas)
 
 	totalPages := int((total + int64(limit) - 1) / int64(limit))
 
+	setPublicCache(w, 30, 60)
 	writeSuccess(w, models.MangaListResponse{
 		Data: mangas,
 		Pagination: models.PaginationResponse{
@@ -193,6 +181,7 @@ func (h *MangaHandler) GetManga(w http.ResponseWriter, r *http.Request) {
 		manga.LastChapterNumber = &chapters[0].ChapterNumber
 	}
 
+	setPrivateCache(w, 15)
 	writeSuccess(w, models.MangaDetailResponse{
 		Manga:    manga,
 		Chapters: chapters,

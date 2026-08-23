@@ -113,7 +113,7 @@ func (r *R2Storage) UploadFile(ctx context.Context, key string, body io.Reader, 
 		Key:          aws.String(key),
 		Body:         bytes.NewReader(buf.Bytes()),
 		ContentType:  aws.String(contentType),
-		CacheControl: aws.String("public, max-age=14400"),
+		CacheControl: aws.String("public, max-age=31536000, immutable"),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to upload object to R2: %w", err)
@@ -140,6 +140,45 @@ func (r *R2Storage) DeleteFile(ctx context.Context, key string) error {
 		Key:    aws.String(key),
 	})
 	return err
+}
+
+// DeleteFiles removes only objects that belong to this storage's public domain
+// and batches them into one R2 operation where possible.
+func (r *R2Storage) DeleteFiles(ctx context.Context, locations []string) error {
+	if r.client == nil || len(locations) == 0 {
+		return nil
+	}
+
+	objects := make([]s3Types.ObjectIdentifier, 0, len(locations))
+	prefix := r.publicDomain + "/"
+	for _, location := range locations {
+		key := strings.TrimLeft(location, "/")
+		if strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://") {
+			if !strings.HasPrefix(location, prefix) {
+				continue
+			}
+			key = strings.TrimPrefix(location, prefix)
+		}
+		if key != "" {
+			objects = append(objects, s3Types.ObjectIdentifier{Key: aws.String(key)})
+		}
+	}
+
+	for start := 0; start < len(objects); start += 1000 {
+		end := min(start+1000, len(objects))
+		_, err := r.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(r.bucket),
+			Delete: &s3Types.Delete{
+				Objects: objects[start:end],
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *R2Storage) DeletePrefix(ctx context.Context, prefix string) error {

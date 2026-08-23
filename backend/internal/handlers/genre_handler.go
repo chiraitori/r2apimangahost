@@ -51,6 +51,7 @@ func (h *GenreHandler) GetGenres(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(allGenres)
 
+	setPublicCache(w, 300, 600)
 	writeSuccess(w, allGenres)
 }
 
@@ -84,6 +85,7 @@ func (h *GenreHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		cursor.Close(ctx)
 	}
 
+	setPublicCache(w, 30, 60)
 	writeSuccess(w, StatsResponse{
 		TotalMangas:   totalMangas,
 		TotalChapters: totalChapters,
@@ -116,19 +118,7 @@ func (h *GenreHandler) GetHome(w http.ResponseWriter, r *http.Request) {
 		latestCursor.Close(ctx)
 	}
 
-	// Populate latest chapter info
-	for i := range latest {
-		var lastChapter models.Chapter
-		err := h.db.Chapters.FindOne(ctx,
-			bson.M{"mangaId": latest[i].ID},
-			options.FindOne().SetSort(bson.D{{Key: "chapterNumber", Value: -1}}),
-		).Decode(&lastChapter)
-		if err == nil {
-			latest[i].LastChapterNumber = &lastChapter.ChapterNumber
-		}
-		cnt, _ := h.db.Chapters.CountDocuments(ctx, bson.M{"mangaId": latest[i].ID})
-		latest[i].ChapterCount = int(cnt)
-	}
+	populateChapterMetadata(ctx, h.db.Chapters, latest)
 
 	// Popular: Most views
 	popCursor, _ := h.db.Mangas.Find(ctx, bson.M{}, options.Find().SetSort(bson.D{{Key: "views", Value: -1}}).SetLimit(10))
@@ -148,6 +138,7 @@ func (h *GenreHandler) GetHome(w http.ResponseWriter, r *http.Request) {
 		popular = []models.Manga{}
 	}
 
+	setPublicCache(w, 30, 60)
 	writeSuccess(w, HomeResponse{
 		Featured: featured,
 		Latest:   latest,

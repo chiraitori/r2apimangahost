@@ -112,6 +112,7 @@ func (h *ChapterHandler) GetChapter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	setPublicCache(w, 60, 300)
 	writeSuccess(w, resp)
 }
 
@@ -164,7 +165,12 @@ func (h *ChapterHandler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	chapterKeyFolder := fmt.Sprintf("chapters/%s/c%s", manga.Slug, strings.ReplaceAll(strconv.FormatFloat(chapterNumber, 'f', -1, 64), ".", "_"))
+	chapterKeyFolder := fmt.Sprintf(
+		"chapters/%s/c%s/v%d",
+		manga.Slug,
+		strings.ReplaceAll(strconv.FormatFloat(chapterNumber, 'f', -1, 64), ".", "_"),
+		time.Now().UTC().UnixNano(),
+	)
 
 	var pageURLs []string
 
@@ -249,6 +255,7 @@ func (h *ChapterHandler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 
 	var savedChapter models.Chapter
 	if err == nil {
+		oldPageURLs := append([]string(nil), existingChapter.Pages...)
 		// Update existing chapter
 		update := bson.M{
 			"title":     title,
@@ -269,6 +276,9 @@ func (h *ChapterHandler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 		savedChapter.Pages = pageURLs
 		savedChapter.PageCount = len(pageURLs)
 		savedChapter.UpdatedAt = now
+		go func(urls []string) {
+			_ = h.storage.DeleteFiles(context.Background(), urls)
+		}(oldPageURLs)
 	} else {
 		// Insert new chapter
 		newChapter := models.Chapter{
