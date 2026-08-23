@@ -41,7 +41,7 @@ wait_for_health() {
   local i
 
   for ((i = 1; i <= attempts; i++)); do
-    if curl --fail --silent --show-error --max-time 3 "$url" >/dev/null; then
+    if curl --fail --silent --max-time 3 "$url" >/dev/null; then
       return 0
     fi
     sleep "$delay"
@@ -58,8 +58,6 @@ done
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || die "another deployment is already running"
-
-sudo -v
 
 if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=normal)" ]]; then
   git -C "$REPO_DIR" status --short
