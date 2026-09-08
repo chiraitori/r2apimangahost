@@ -5,6 +5,10 @@
 *.env
 !.env.example
 
+# Private R18 deployment files (kept on the VPS, never committed)
+/s3/
+/ops/
+
 # Node.js & Dependencies
 node_modules/
 npm-debug.log*
