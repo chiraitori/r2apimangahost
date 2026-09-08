@@ -15,6 +15,8 @@ type Config struct {
 	MongoURI              string
 	DBName                string
 	R2AccountID           string
+	S3Endpoint            string
+	S3Region              string
 	R2AccessKeyID         string
 	R2SecretKey           string
 	R2BucketName          string
@@ -43,6 +45,8 @@ func LoadConfig() *Config {
 		MongoURI:              getEnv("MONGODB_URI", "mongodb://localhost:27017"),
 		DBName:                getEnv("MONGODB_DB_NAME", "mangahost"),
 		R2AccountID:           getEnv("R2_ACCOUNT_ID", ""),
+		S3Endpoint:            strings.TrimRight(getEnv("S3_ENDPOINT", ""), "/"),
+		S3Region:              getEnv("S3_REGION", "auto"),
 		R2AccessKeyID:         getEnv("R2_ACCESS_KEY_ID", ""),
 		R2SecretKey:           getEnv("R2_SECRET_ACCESS_KEY", ""),
 		R2BucketName:          getEnv("R2_BUCKET_NAME", "mangahost"),

@@ -36,20 +36,27 @@ const (
 )
 
 func NewR2Storage(cfg *config.Config) (*R2Storage, error) {
-	if cfg.R2AccountID == "" || cfg.R2AccessKeyID == "" || cfg.R2SecretKey == "" {
-		log.Println("[R2] Warning: Cloudflare R2 credentials are not fully configured.")
+	if (cfg.R2AccountID == "" && cfg.S3Endpoint == "") || cfg.R2AccessKeyID == "" || cfg.R2SecretKey == "" {
+		log.Println("[Storage] Warning: S3-compatible storage credentials are not fully configured.")
 		return &R2Storage{
 			bucket:       cfg.R2BucketName,
 			publicDomain: strings.TrimRight(cfg.R2PublicDomain, "/"),
 		}, nil
 	}
 
-	endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.R2AccountID)
+	endpoint := cfg.S3Endpoint
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.R2AccountID)
+	}
+	region := cfg.S3Region
+	if region == "" {
+		region = "auto"
+	}
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			URL:               endpoint,
-			SigningRegion:     "auto",
+			SigningRegion:     region,
 			HostnameImmutable: true,
 		}, nil
 	})
@@ -61,7 +68,7 @@ func NewR2Storage(cfg *config.Config) (*R2Storage, error) {
 			cfg.R2SecretKey,
 			"",
 		)),
-		awsConfig.WithRegion("auto"),
+		awsConfig.WithRegion(region),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config for R2: %w", err)
